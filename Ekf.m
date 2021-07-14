@@ -5,6 +5,7 @@
 classdef Ekf
     properties
         X;%状态向量，行向量，所有使用X的地方应该转置。
+        X_;
         P;
         H;
         R;
@@ -22,29 +23,33 @@ classdef Ekf
         %       t:当前绝对时间单位秒  
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function obj=Init(obj,z,t)
+            if t-obj.last_t>0.5
+                obj.init_flag=false;
+            end
             if obj.init_flag
                 return;
             end
-            obj.init_flag=true;
+           
             obj.last_t=t;
             obj.X=z;
             
             obj.H=eye(size(obj.X,2));
             
-            obj.P=eye(size(obj.X,2))*1e-08;
+            obj.P=eye(size(obj.X,2))*1e-06;
             
             %测量噪声协方差矩阵
             obj.R=[ 1.0e-04  0  0  0  0;
-                0  1.0e-04  0  0  0;
-                0  0  1.0e-06  0  0;
-                0  0  0  2.0e-04  0;
-                0  0  0  0  1.0e-05;];
+                    0  1.0e-04  0  0  0;
+                    0  0  1.0e-09  0  0;
+                    0  0  0  1.0e-07  0;
+                    0  0  0  0  1.0e-09;];
             %模型噪声协方差矩阵
-            obj.Q=[ 1.0e-3 0   0     0   0;
-                0   1.0e-3 0     0   0;
-                0   0   1.0e-3 0   0;
-                0   0   0     5e-3 0;
-                0   0   0     0   2.5e-4;];
+             obj.Q=[2.0e-5 0        0    0   0;
+                    0      2.0e-5   0    0   0;
+                    0      0        1.0e-4   0   0;
+                    0      0        0    2.0e-3   0;
+                    0      0        0    0   1.0e-4;];
+                 obj.init_flag=true;
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -60,6 +65,7 @@ classdef Ekf
             L=4;
             
             dt=t-obj.last_t;
+            obj.last_t=t;
             x=obj.X(1);
             y=obj.X(2);
             phi=obj.X(3);
@@ -68,19 +74,28 @@ classdef Ekf
             a=u(1);
             
             p_x=x+cos(phi)*cos(delta)*v*dt;
+%             p_x=x+cos(phi)*cos(delta)*(v+a*dt/2)*dt;
             p_y=y+sin(phi)*cos(delta)*v*dt;
             p_phi=phi+2*v*sin(delta)*dt/L;
             p_v=v;
             p_delta=delta;
             
             obj.X=[p_x p_y p_phi p_v p_delta];
+            obj.X_=obj.X;
             
-            F =[
-                1 0  -(v + a * dt / 2) * sin(phi) * cos(delta) * dt  cos(delta) * cos(phi) * dt -(v + a * dt / 2) * cos(phi) * sin(delta) * dt;
-                0 1 (v + a * dt / 2) * cos(phi) * cos(delta) * dt    cos(delta) * sin(phi) * dt -(v + a * dt / 2) * sin(phi) * sin(delta) * dt;
+%             F =[
+%                 1 0  -(v + a * dt / 2) * sin(phi) * cos(delta) * dt  cos(delta) * cos(phi)*dt  -(v + a * dt / 2) * cos(phi) * sin(delta) * dt;
+%                 0 1 (v + a * dt / 2) * cos(phi) * cos(delta) * dt    cos(delta) * sin(phi)*dt  -(v + a * dt / 2) * sin(phi) * sin(delta) * dt;
+%                 0 0 1 2 * sin(delta) / L * dt  2 * v * cos(delta) * dt / L;
+%                 0 0 0 1 0;
+%                 0 0 0 0 1; ];
+              F =[
+                1 0  -v * sin(phi) * cos(delta) * dt  cos(delta) * cos(phi) * dt  -v  * cos(phi) * sin(delta) * dt;
+                0 1 v * cos(phi) * cos(delta) * dt    cos(delta) * sin(phi) * dt  -v  * sin(phi) * sin(delta) * dt;
                 0 0 1 2 * sin(delta) / L * dt  2 * v * cos(delta) * dt / L;
                 0 0 0 1 0;
                 0 0 0 0 1; ];
+    
             
             obj.P=F*obj.P*F'+obj.Q;
             
@@ -111,6 +126,9 @@ classdef Ekf
         end
         function P=Get_P(obj)
             P=obj.P;
+        end
+          function X_=Get_X_(obj)
+            X_=obj.X_;
         end
         
     end
